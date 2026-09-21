@@ -18,7 +18,8 @@ except ImportError:          # still works without numpy, just with flatter chro
     np = None
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-FONT = os.path.join(HERE, "fonts", "Unbounded.ttf")
+# the font can sit in a fonts folder or right next to this file, either works
+FONT_SPOTS = [os.path.join(HERE, "fonts", "Unbounded.ttf"), os.path.join(HERE, "Unbounded.ttf")]
 
 W, H = 400, 132          # same size as the music card so they stack neatly
 M = 26
@@ -62,7 +63,7 @@ def rounded(rect, r):
 
 
 def load_font(size, weight):
-    for path in (FONT, r"C:\Windows\Fonts\segoeuib.ttf"):
+    for path in FONT_SPOTS + [r"C:\Windows\Fonts\segoeuib.ttf"]:
         try:
             f = ImageFont.truetype(path, size)
             try:
