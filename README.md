@@ -2,7 +2,7 @@
 
 Aesthetic desktop widgets for Windows. A now playing card for Spotify that takes its colors from the album cover, plus rounded GIF boxes that loop your favorite GIFs.
 
-<img src="https://github.com/user-attachments/assets/938b8e45-c547-4b84-b360-d4a57d6115ca" width="100%" alt="preview">
+<img src="https://github.com/user-attachments/assets/80a9b825-ec9b-4324-8986-ba44bebc5dcf" width="100%" alt="Aura widgets">
 
 ## Widgets
 
