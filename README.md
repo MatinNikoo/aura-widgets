@@ -18,11 +18,11 @@ Aesthetic desktop widgets for Windows. A now playing card for Spotify that takes
 * Resize by dragging the edges, and hold Ctrl while dragging to choose which part of the GIF shows
 * Copy the file under a new name to get another independent box
 
-   **Clock (`aura_clock.pyw`)**
-   * Time in 3D liquid chrome using the Unbounded font, with the date underneath
-   * A 3D chrome star that softly shines every few seconds, plus tiny twinkling stars
-   * Uses your PC's clock, with 12 or 24 hour time and optional seconds
-   * 
+**Clock (`aura_clock.pyw`)**
+* Time in 3D liquid chrome using the Unbounded font, with the date underneath
+* A 3D chrome star that softly shines every few seconds, plus tiny twinkling stars
+* Uses your PC's clock, with 12 or 24 hour time and optional seconds
+
 **All widgets**
 * Drag anywhere on the desktop, and positions are remembered
 * Optional launch at startup
@@ -37,6 +37,7 @@ Aesthetic desktop widgets for Windows. A now playing card for Spotify that takes
 * **GIF playback** uses a custom frame scheduler that follows each frame's own delay, applies the same minimum delay rule browsers use, and scales timing by the chosen speed
 * **Game detection** checks every two seconds whether the foreground window covers the whole monitor, using Win32 calls through `ctypes`
 * **3D chrome text** turns each letter into a height map, works out which way every pixel faces, and shades it like a polished metal reflection with NumPy. Each character is rendered once and reused, so updating the time costs almost nothing
+
 ## Setup
 
 1. Install [Python 3.12+](https://www.python.org/downloads/) and check **Add python.exe to PATH**
@@ -55,4 +56,4 @@ Python, PyQt6, Pillow, NumPy, WinRT (Windows media session API), Win32 via ctype
 
 MIT
 
-The Unbounded font is included under the SIL Open Font License (see `fonts/OFL.txt`).
+The Unbounded font is included under the SIL Open Font License (see `OFL.txt`).
