@@ -1,0 +1,202 @@
+{
+  "machine": "Linux-6.18.44-fc-v153-x86_64-with-glibc2.39",
+  "python": "3.13.16",
+  "qt_platform": "offscreen",
+  "cpu_count": 2,
+  "rows": {
+    "palette from a 640px cover": {
+      "median_ms": 3.941,
+      "p95_ms": 4.353,
+      "runs": 200
+    },
+    "1.0 run1 new song (decode, palette, card layer)": {
+      "median_ms": 14.341,
+      "p95_ms": 17.673,
+      "runs": 100
+    },
+    "1.0 run1 music card frame": {
+      "median_ms": 0.767,
+      "p95_ms": 0.976,
+      "runs": 300
+    },
+    "1.0 run1 music card frame during crossfade": {
+      "median_ms": 1.142,
+      "p95_ms": 1.468,
+      "runs": 300
+    },
+    "1.0 run1 music card frame with controls": {
+      "median_ms": 0.965,
+      "p95_ms": 1.301,
+      "runs": 300
+    },
+    "1.0 run1 clock startup (chrome star and card)": {
+      "once_ms": 120.8
+    },
+    "1.0 run1 clock first frame (chrome digits made once)": {
+      "once_ms": 426.2
+    },
+    "1.0 run1 clock frame": {
+      "median_ms": 2.57,
+      "p95_ms": 3.288,
+      "runs": 300
+    },
+    "1.0 run1 clock frame while the star shines": {
+      "median_ms": 3.311,
+      "p95_ms": 4.263,
+      "runs": 300
+    },
+    "1.0 run1 gif frame scaled to the card (480x270 to 440x160)": {
+      "median_ms": 2.848,
+      "p95_ms": 4.074,
+      "runs": 300
+    },
+    "1.0 run1 gif card frame": {
+      "median_ms": 1.583,
+      "p95_ms": 2.116,
+      "runs": 300
+    },
+    "1.1 run1 new song (decode, palette, card layer)": {
+      "median_ms": 15.408,
+      "p95_ms": 20.095,
+      "runs": 100
+    },
+    "1.1 run1 music card frame": {
+      "median_ms": 0.762,
+      "p95_ms": 1.052,
+      "runs": 300
+    },
+    "1.1 run1 music card frame during crossfade": {
+      "median_ms": 1.048,
+      "p95_ms": 1.413,
+      "runs": 300
+    },
+    "1.1 run1 music card frame with controls": {
+      "median_ms": 0.865,
+      "p95_ms": 1.106,
+      "runs": 300
+    },
+    "1.1 run1 clock startup (chrome star and card)": {
+      "once_ms": 117.8
+    },
+    "1.1 run1 clock first frame (chrome digits made once)": {
+      "once_ms": 453.4
+    },
+    "1.1 run1 clock frame": {
+      "median_ms": 1.973,
+      "p95_ms": 2.434,
+      "runs": 300
+    },
+    "1.1 run1 clock frame while the star shines": {
+      "median_ms": 2.452,
+      "p95_ms": 2.811,
+      "runs": 300
+    },
+    "1.1 run1 gif frame scaled to the card (480x270 to 440x160)": {
+      "median_ms": 2.659,
+      "p95_ms": 3.207,
+      "runs": 300
+    },
+    "1.1 run1 gif card frame": {
+      "median_ms": 1.326,
+      "p95_ms": 1.597,
+      "runs": 300
+    },
+    "1.0 run2 new song (decode, palette, card layer)": {
+      "median_ms": 14.429,
+      "p95_ms": 18.379,
+      "runs": 100
+    },
+    "1.0 run2 music card frame": {
+      "median_ms": 0.813,
+      "p95_ms": 1.1,
+      "runs": 300
+    },
+    "1.0 run2 music card frame during crossfade": {
+      "median_ms": 1.112,
+      "p95_ms": 1.456,
+      "runs": 300
+    },
+    "1.0 run2 music card frame with controls": {
+      "median_ms": 1.037,
+      "p95_ms": 1.357,
+      "runs": 300
+    },
+    "1.0 run2 clock startup (chrome star and card)": {
+      "once_ms": 115.3
+    },
+    "1.0 run2 clock first frame (chrome digits made once)": {
+      "once_ms": 428.7
+    },
+    "1.0 run2 clock frame": {
+      "median_ms": 2.947,
+      "p95_ms": 3.469,
+      "runs": 300
+    },
+    "1.0 run2 clock frame while the star shines": {
+      "median_ms": 3.778,
+      "p95_ms": 4.366,
+      "runs": 300
+    },
+    "1.0 run2 gif frame scaled to the card (480x270 to 440x160)": {
+      "median_ms": 2.812,
+      "p95_ms": 4.236,
+      "runs": 300
+    },
+    "1.0 run2 gif card frame": {
+      "median_ms": 1.338,
+      "p95_ms": 1.699,
+      "runs": 300
+    },
+    "1.1 run2 new song (decode, palette, card layer)": {
+      "median_ms": 17.056,
+      "p95_ms": 23.349,
+      "runs": 100
+    },
+    "1.1 run2 music card frame": {
+      "median_ms": 0.67,
+      "p95_ms": 0.883,
+      "runs": 300
+    },
+    "1.1 run2 music card frame during crossfade": {
+      "median_ms": 1.033,
+      "p95_ms": 1.319,
+      "runs": 300
+    },
+    "1.1 run2 music card frame with controls": {
+      "median_ms": 0.87,
+      "p95_ms": 1.062,
+      "runs": 300
+    },
+    "1.1 run2 clock startup (chrome star and card)": {
+      "once_ms": 140.3
+    },
+    "1.1 run2 clock first frame (chrome digits made once)": {
+      "once_ms": 509.6
+    },
+    "1.1 run2 clock frame": {
+      "median_ms": 1.472,
+      "p95_ms": 1.681,
+      "runs": 300
+    },
+    "1.1 run2 clock frame while the star shines": {
+      "median_ms": 2.01,
+      "p95_ms": 2.978,
+      "runs": 300
+    },
+    "1.1 run2 gif frame scaled to the card (480x270 to 440x160)": {
+      "median_ms": 2.698,
+      "p95_ms": 3.579,
+      "runs": 300
+    },
+    "1.1 run2 gif card frame": {
+      "median_ms": 1.344,
+      "p95_ms": 1.663,
+      "runs": 300
+    },
+    "1.1 round music card frame": {
+      "median_ms": 1.714,
+      "p95_ms": 2.204,
+      "runs": 300
+    }
+  }
+}

@@ -1,0 +1,9 @@
+# exact versions CI tests with
+PyQt6==6.11.0
+Pillow==12.3.0
+numpy==2.5.3
+winrt-runtime==3.2.1; sys_platform == "win32"
+winrt-Windows.Media.Control==3.2.1; sys_platform == "win32"
+winrt-Windows.Storage.Streams==3.2.1; sys_platform == "win32"
+winrt-Windows.Foundation==3.2.1; sys_platform == "win32"
+winrt-Windows.Foundation.Collections==3.2.1; sys_platform == "win32"

@@ -1,0 +1,105 @@
+{
+  "python": "3.13.16",
+  "qt_platform": "offscreen",
+  "seconds_each": 6,
+  "frame_size": [
+    480,
+    270
+  ],
+  "card": [
+    440,
+    160
+  ],
+  "rows": [
+    {
+      "version": "v1_0",
+      "delay_ms": 20,
+      "speed": 1.0,
+      "frames": 206,
+      "wanted_ms": 20,
+      "mean_gap_ms": 30.65,
+      "playback_speed": 0.653
+    },
+    {
+      "version": "v1_1",
+      "delay_ms": 20,
+      "speed": 1.0,
+      "frames": 288,
+      "wanted_ms": 20,
+      "mean_gap_ms": 20.79,
+      "playback_speed": 0.962
+    },
+    {
+      "version": "v1_0",
+      "delay_ms": 40,
+      "speed": 1.0,
+      "frames": 115,
+      "wanted_ms": 40,
+      "mean_gap_ms": 50.25,
+      "playback_speed": 0.796
+    },
+    {
+      "version": "v1_1",
+      "delay_ms": 40,
+      "speed": 1.0,
+      "frames": 148,
+      "wanted_ms": 40,
+      "mean_gap_ms": 40.05,
+      "playback_speed": 0.999
+    },
+    {
+      "version": "v1_0",
+      "delay_ms": 70,
+      "speed": 1.0,
+      "frames": 74,
+      "wanted_ms": 70,
+      "mean_gap_ms": 80.91,
+      "playback_speed": 0.865
+    },
+    {
+      "version": "v1_1",
+      "delay_ms": 70,
+      "speed": 1.0,
+      "frames": 84,
+      "wanted_ms": 70,
+      "mean_gap_ms": 70.07,
+      "playback_speed": 0.999
+    },
+    {
+      "version": "v1_0",
+      "delay_ms": 40,
+      "speed": 2.0,
+      "frames": 209,
+      "wanted_ms": 20,
+      "mean_gap_ms": 28.68,
+      "playback_speed": 0.697
+    },
+    {
+      "version": "v1_1",
+      "delay_ms": 40,
+      "speed": 2.0,
+      "frames": 287,
+      "wanted_ms": 20,
+      "mean_gap_ms": 20.37,
+      "playback_speed": 0.982
+    },
+    {
+      "version": "v1_0",
+      "delay_ms": 100,
+      "speed": 0.5,
+      "frames": 28,
+      "wanted_ms": 200,
+      "mean_gap_ms": 206.25,
+      "playback_speed": 0.97
+    },
+    {
+      "version": "v1_1",
+      "delay_ms": 100,
+      "speed": 0.5,
+      "frames": 30,
+      "wanted_ms": 200,
+      "mean_gap_ms": 200.01,
+      "playback_speed": 1.0
+    }
+  ]
+}

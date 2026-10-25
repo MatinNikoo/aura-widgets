@@ -1,9 +1,9 @@
 @echo off
 title Aura widget setup
-echo Installing what the widget needs...
-py -m pip install --upgrade PyQt6 Pillow winrt-runtime winrt-Windows.Media.Control winrt-Windows.Storage.Streams winrt-Windows.Foundation winrt-Windows.Foundation.Collections
+echo Installing what the widgets need...
+py -m pip install --upgrade -r "%~dp0requirements.txt"
 if errorlevel 1 (
-  python -m pip install --upgrade PyQt6 Pillow winrt-runtime winrt-Windows.Media.Control winrt-Windows.Storage.Streams winrt-Windows.Foundation winrt-Windows.Foundation.Collections
+  python -m pip install --upgrade -r "%~dp0requirements.txt"
 )
 echo.
 echo Done. Starting the widget...

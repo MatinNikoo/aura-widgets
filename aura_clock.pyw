@@ -5,12 +5,16 @@ Right click for options. Drag it anywhere.
 
 Needs the fonts folder next to this file (Unbounded, SIL Open Font License).
 """
-import sys, os, tempfile, datetime, math, random, time
+import sys, os, tempfile, datetime, math, random, time, logging
 
-from PIL import Image, ImageFilter, ImageDraw, ImageFont
-from PyQt6.QtCore import Qt, QRectF, QPointF, QSettings, QPoint, QLockFile, QTimer
-from PyQt6.QtGui import (QPainter, QColor, QImage, QPainterPath, QPen, QLinearGradient,
-                         QRadialGradient, QGuiApplication, QAction)
+from PIL import Image, ImageDraw, ImageFont
+from PyQt6.QtCore import Qt, QRectF, QPointF, QPoint, QLockFile, QTimer, QSize, QLocale, QDate, QCalendar
+from PyQt6.QtGui import (QPainter, QColor, QImage, QPainterPath, QLinearGradient, QFont, QFontMetricsF,
+                         QFontDatabase, QImageReader, QRadialGradient, QAction, QPen)
+
+import aura_common
+from aura_common import fullscreen_app_open
+from aura_draw import shape_path, shadow_pil, draw_border, inset, GifPlayer, render
 
 try:
     import numpy as np
@@ -52,6 +56,7 @@ def pil_to_qimage(im, dpr=1):
     im = im.convert("RGBA")
     q = QImage(im.tobytes("raw", "RGBA"), im.width, im.height, im.width * 4,
                QImage.Format.Format_RGBA8888).copy()
+    q = q.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)    # drawn every frame, convert once
     q.setDevicePixelRatio(dpr)
     return q
 
@@ -154,26 +159,77 @@ def pulse(t):
     return math.sin(math.pi * max(0.0, min(1.0, t))) ** 2
 
 
+def ms_to_next_tick(now, seconds):
+    """How long until the shown time changes, plus a little so we land just past the change."""
+    if seconds:
+        wait = 1000 - now.microsecond // 1000
+    else:
+        wait = (60 - now.second) * 1000 - now.microsecond // 1000
+    return max(50, wait + 20)
+
+
 # ---------------------------------------------------------------- text as chrome glyphs
+def flat(mask_img):
+    """The plain look: soft white letters with a light top to bottom fade, no chrome."""
+    g = Image.linear_gradient("L").resize(mask_img.size).point(lambda v: 255 - v // 7)
+    return Image.merge("RGBA", (g, g, g, mask_img))
+
+
+def qt_font(family, px, weight):
+    f = QFont(family)
+    f.setPixelSize(max(1, int(px)))
+    f.setWeight(QFont.Weight(weight))
+    return f
+
+
+def qt_mask(text, font, w, h, x, baseline):
+    """White text on black, drawn by Qt, so any installed font and any script works."""
+    img = QImage(w, h, QImage.Format.Format_Grayscale8)
+    img.fill(0)
+    p = QPainter(img)
+    p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+    p.setFont(font)
+    p.setPen(QColor(255, 255, 255))
+    p.drawText(QPointF(x, baseline), text)
+    p.end()
+    ptr = img.constBits()
+    ptr.setsize(img.sizeInBytes())
+    return Image.frombuffer("L", (w, h), bytes(ptr), "raw", "L", img.bytesPerLine(), 1).copy()
+
+
 class Glyphs:
     """Each character is turned into chrome once and reused, so updating the time is instant."""
 
-    def __init__(self, px_size, weight, thick, stretch):
-        self.font = load_font(int(px_size * S), weight)
+    def __init__(self, px_size, weight, thick, stretch, family="", style="chrome"):
+        self.family, self.style = family, style
+        if family:
+            self.qfont = qt_font(family, px_size * S, weight)
+            self.font = None
+        else:
+            self.font = load_font(int(px_size * S), weight)
         self.thick, self.stretch = thick, stretch
         self.cache = {}
 
     def get(self, ch):
         if ch not in self.cache:
-            f = self.font
-            asc, desc = f.getmetrics()
-            adv = f.getlength(ch)
             pad = int(self.thick * 2 + 4)
-            wpx, hpx = int(adv + 2 * pad), int(asc + desc + 2 * pad)
-            m = Image.new("L", (wpx, hpx), 0)
-            ImageDraw.Draw(m).text((pad, pad + asc), ch, font=f, fill=255, anchor="ls")
+            if self.font is not None:
+                f = self.font
+                asc, desc = f.getmetrics()
+                adv = f.getlength(ch)
+                wpx, hpx = int(adv + 2 * pad), int(asc + desc + 2 * pad)
+                m = Image.new("L", (wpx, hpx), 0)
+                ImageDraw.Draw(m).text((pad, pad + asc), ch, font=f, fill=255, anchor="ls")
+            else:
+                fm = QFontMetricsF(self.qfont)
+                asc, desc, adv = fm.ascent(), fm.descent(), fm.horizontalAdvance(ch)
+                wpx, hpx = int(adv + 2 * pad), int(asc + desc + 2 * pad)
+                m = qt_mask(ch, self.qfont, max(1, wpx), max(1, hpx), pad, pad + asc)
             m = m.resize((wpx, int(hpx * self.stretch)), Image.Resampling.LANCZOS)
-            img = chrome(m, self.thick) if ch.strip() else m.convert("RGBA")
+            if not ch.strip():
+                img = m.convert("RGBA")
+            else:
+                img = chrome(m, self.thick) if self.style == "chrome" else flat(m)
             box = m.getbbox() or (pad, pad, pad, pad)
             self.cache[ch] = {
                 "img": pil_to_qimage(img, S),
@@ -195,27 +251,80 @@ class Glyphs:
 
 
 # ---------------------------------------------------------------- the card
+CIRCLE = 200             # the round clock is this wide
+
+# tiny stars on the round clock, kept off the text in the middle
+TINY_ROUND = [
+    (64, 46, 3.0, "star"), (138, 36, 2.6, "star"), (101, 24, 1.8, "dot"), (166, 64, 1.6, "dot"),
+    (32, 84, 1.6, "dot"), (70, 170, 2.4, "star"), (130, 176, 1.8, "dot"), (162, 148, 1.6, "dot"),
+]
+
+DATE_PATTERNS = {"weekday": "dddd, MMMM d", "full": "dddd, MMMM d, yyyy", "short": "MMM d", "iso": "yyyy-MM-dd"}
+
+
 class ClockCard:
     def __init__(self):
         self.h24 = False
         self.seconds = False
-        digit_px = TIME_H / (0.77 * STRETCH)         # font size that makes the digits TIME_H tall
-        self.big = Glyphs(digit_px, 700, thick=11 * S * digit_px / 48, stretch=STRETCH)
-        self.small = Glyphs(digit_px * 0.36, 700, thick=4.5 * S * digit_px / 48, stretch=STRETCH)
+        self.shape, self.radius, self.border = "rounded", RADIUS, "thin"
+        self.style, self.family, self.time_size = "chrome", "", 100
+        self.face = "digital"
+        self.date_kind, self.locale, self.lowercase = "weekday", "", True
+        self.dim = 45
+        self.background = None   # current frame of the background GIF or image, already fitted to the card
+        self.show_shadow = True
+        self.effects = {}
+        self.star_img, self.star_glow = self._star()
+        self.build()
+
+    def build(self):
+        """Everything that depends on the look settings."""
+        k = self.time_size / 100
+        digit_px = TIME_H * k / (0.77 * STRETCH)     # font size that makes the digits TIME_H tall
+        self.big = Glyphs(digit_px, 700, thick=11 * S * digit_px / 48, stretch=STRETCH,
+                          family=self.family, style=self.style)
+        self.small = Glyphs(digit_px * 0.36, 700, thick=4.5 * S * digit_px / 48, stretch=STRETCH,
+                            family=self.family, style=self.style)
         self.date_font = load_font(int(11.5 * S), 300)
         self.date_cache = (None, None)
         self.shadow = self._shadow()
-        self.star_img, self.star_glow = self._star()
         self.base = self._base()
-        self.effects = {}
+
+    def apply(self, o):
+        """Settings from the settings file (see aura_common.SCHEMA)."""
+        self.h24, self.seconds = o["h24"], o["seconds"]
+        look = (o["shape"], o["radius"], o["border"], o["style"], o["font"], o["time_size"], o["background"] != "",
+                o.get("face", "digital"))
+        now = (self.shape, self.radius, self.border, self.style, self.family, self.time_size,
+               getattr(self, "bg_on", False), self.face)
+        self.date_kind, self.locale, self.lowercase = o["date"], o["locale"], o["lowercase"]
+        self.dim = o["background_dim"]
+        self.show_shadow = o["shadow"]
+        self.date_cache = (None, None)
+        if look != now:
+            self.shape, self.radius, self.border, self.style, self.family, self.time_size, self.bg_on, self.face = look
+            if not self.bg_on:
+                self.background = None
+            self.effects = {}
+            self.build()
+
+    @property
+    def round(self):
+        return self.shape == "circle"
+
+    @property
+    def size(self):
+        return (CIRCLE, CIRCLE) if self.round else (W, H)
+
+    @property
+    def tiny(self):
+        return TINY_ROUND if self.round else TINY
 
     # drawn once
     def _shadow(self):
         s = 2
-        im = Image.new("RGBA", ((W + 2 * M) * s, (H + 2 * M) * s), (0, 0, 0, 0))
-        ImageDraw.Draw(im).rounded_rectangle(
-            [M * s + 6, (M + 6) * s, (M + W) * s - 6, (M + H + 2) * s], radius=RADIUS * s, fill=(0, 0, 0, 130))
-        return pil_to_qimage(im.filter(ImageFilter.GaussianBlur(13 * s)), s)
+        w, h = self.size
+        return pil_to_qimage(shadow_pil(w, h, M, self.shape, self.radius, 130, s), s)
 
     def _star(self):
         pad = 14
@@ -235,25 +344,49 @@ class ClockCard:
         h = self.star_img.height() / S
         return QRectF(STAR_C[0] - w / 2, STAR_C[1] - h / 2, w, h)
 
+    def card_path(self):
+        w, h = self.size
+        return shape_path(self.shape, QRectF(0, 0, w, h), self.radius)
+
     def _base(self):
-        img = QImage(W * S, H * S, QImage.Format.Format_ARGB32_Premultiplied)
+        w, h = self.size
+        img = QImage(w * S, h * S, QImage.Format.Format_ARGB32_Premultiplied)
         img.setDevicePixelRatio(S)
         img.fill(Qt.GlobalColor.transparent)
         p = QPainter(img)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        g = QLinearGradient(0, 0, 0, H)
-        g.setColorAt(0, QColor(13, 13, 15))
-        g.setColorAt(1, QColor(4, 4, 5))
-        p.fillPath(rounded(QRectF(0, 0, W, H), RADIUS), g)
-        p.setPen(QPen(QColor(255, 255, 255, 22), 1))
-        p.drawPath(rounded(QRectF(0.5, 0.5, W - 1, H - 1), RADIUS - 0.5))
-        for i in range(len(TINY)):
+        if not getattr(self, "bg_on", False):     # with a background, the fill is drawn under it instead
+            p.fillPath(self.card_path(), self.fill())
+        draw_border(p, self.border, self.shape, w, h, self.radius, thin_alpha=22)
+        if (self.shape, self.radius) != ("rounded", RADIUS):
+            p.setClipPath(self.card_path())          # keep the little stars inside other shapes
+        for i in range(len(self.tiny)):
             self.draw_tiny(p, i, 0.0)
-        self.draw_halo(p, 0.0)
-        p.drawImage(self.star_rect_img(), self.star_img)
+        if not self.round:
+            self.draw_halo(p, 0.0)
+            p.drawImage(self.star_rect_img(), self.star_img)
+        if self.face == "analog":
+            self.draw_dial(p)
         p.end()
         return img
+
+    def fill(self):
+        g = QLinearGradient(0, 0, 0, self.size[1])
+        g.setColorAt(0, QColor(13, 13, 15))
+        g.setColorAt(1, QColor(4, 4, 5))
+        return g
+
+    def set_background(self, img):
+        """Fit a background frame to the card once, so drawing it later is just a copy."""
+        if img is None or img.isNull():
+            self.background = None
+            return
+        w, h = self.size
+        scaled = img.scaled(QSize(w * 2, h * 2), Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                            Qt.TransformationMode.SmoothTransformation)
+        scaled.setDevicePixelRatio(2)
+        self.background = scaled
 
     # stars
     def draw_halo(self, p, shine):
@@ -275,7 +408,7 @@ class ClockCard:
         p.setOpacity(1)
 
     def draw_tiny(self, p, i, glow):
-        x, y, size, kind = TINY[i]
+        x, y, size, kind = self.tiny[i]
         p.setPen(Qt.PenStyle.NoPen)
         if glow > 0.01:
             r = size * 4
@@ -301,12 +434,14 @@ class ClockCard:
         return self.star_rect_img().adjusted(-8, -8, 8, 8)
 
     def tiny_rect(self, i):
-        x, y, size, _ = TINY[i]
+        x, y, size, _ = self.tiny[i]
         r = size * 4 + 2
         return QRectF(x - r, y - r, 2 * r, 2 * r)
 
     # animation bookkeeping
     def start(self, key):
+        if key == "main" and self.round:
+            return                                   # the round clock has no big star
         self.effects[key] = time.monotonic()
 
     def active_rects(self):
@@ -327,29 +462,167 @@ class ClockCard:
             h = now.hour % 12 or 12
             t = f"{h}:{now.minute:02d}" + (f":{now.second:02d}" if self.seconds else "")
             ampm = "am" if now.hour < 12 else "pm"
-        date = f"{now.strftime('%A').lower()}, {now.strftime('%B').lower()} {now.day}"
-        return t, ampm, date
+        if self.locale == "" and self.date_kind == "weekday":
+            date = f"{now.strftime('%A')}, {now.strftime('%B')} {now.day}"      # what 1.0 showed
+        else:
+            date = self.local_date(now)
+        return t, ampm, date.lower() if self.lowercase else date
+
+    def local_date(self, now):
+        """The date in the chosen language, using Qt's locale data. Persian uses the Persian calendar."""
+        if self.date_kind == "none":
+            return ""
+        loc = QLocale(self.locale or "en_US")
+        d = QDate(now.year, now.month, now.day)
+        cal = QCalendar(QCalendar.System.Jalali) if self.locale == "fa_IR" else QCalendar()
+        if self.date_kind == "numeric":
+            pattern = loc.dateFormat(QLocale.FormatType.ShortFormat)
+        else:
+            pattern = DATE_PATTERNS[self.date_kind]
+        return loc.toString(d, pattern, cal)
+
+    def layout(self):
+        """Top of the digits, top of the date, room for the time, and whether things are centered."""
+        w, h = self.size
+        k = self.time_size / 100
+        th = TIME_H * k
+        has_date = self.date_kind != "none"
+        if self.round:
+            top = h * 0.5 - (th + (26 if has_date else 0)) / 2 - 4
+            room = w - 2 * inset("circle", w, h, 0, top, top + th) - 28
+            return top, top + th + 14, room, True
+        if (k, has_date) == (1, True):
+            return TIME_TOP, DATE_TOP, TEXT_MAX_W, False
+        top = 65.5 - (th + (26 if has_date else 0)) / 2
+        return top, top + th + 14, TEXT_MAX_W, False
 
     def date_image(self, date):
         if self.date_cache[0] != date:
-            f = self.date_font
-            l, t, r, b = f.getbbox(date)
-            im = Image.new("RGBA", (r - l + 4, b - t + 4), (0, 0, 0, 0))
-            ImageDraw.Draw(im).text((2 - l, 2 - t), date, font=f, fill=(150, 153, 163, 255))
-            self.date_cache = (date, pil_to_qimage(im, S))
+            if not self.family and all(ord(c) < 0x250 for c in date):
+                f = self.date_font
+                l, t, r, b = f.getbbox(date)
+                im = Image.new("RGBA", (r - l + 4, b - t + 4), (0, 0, 0, 0))
+                ImageDraw.Draw(im).text((2 - l, 2 - t), date, font=f, fill=(150, 153, 163, 255))
+                img = pil_to_qimage(im, S)
+            else:
+                img = self.qt_date(date)
+            self.date_cache = (date, img)
         return self.date_cache[1]
 
+    def qt_date(self, date):
+        """Dates in other scripts (Persian, Arabic, Chinese...) go through Qt, which shapes them and
+        finds a font that has the letters."""
+        f = qt_font(self.family or unbounded_family(), 11.5 * S, 300)
+        fm = QFontMetricsF(f)
+        room = (self.dial()[5] if self.face == "analog" else self.layout()[2]) * S
+        text = fm.elidedText(date, Qt.TextElideMode.ElideRight, room)
+        r = fm.tightBoundingRect(text)
+        wpx, hpx = int(fm.horizontalAdvance(text) + 8), int(fm.height() + 6)
+        img = QImage(max(1, wpx), max(1, hpx), QImage.Format.Format_ARGB32_Premultiplied)
+        img.fill(Qt.GlobalColor.transparent)
+        p = QPainter(img)
+        p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        p.setFont(f)
+        p.setPen(QColor(150, 153, 163))
+        p.drawText(QPointF(2 - min(0, r.left()), 2 + fm.ascent() - (fm.ascent() + r.top())), text)
+        p.end()
+        img.setDevicePixelRatio(S)
+        return img
+
+    # analog face
+    def dial(self):
+        """Center and radius of the dial, and where the date goes, as (cx, cy, r, date_x, date_top, room)."""
+        w, h = self.size
+        k = self.time_size / 100
+        has_date = self.date_kind != "none"
+        if self.round:
+            r = (54 if has_date else 70) * k
+            cy = h / 2 - (14 if has_date else 0) * k
+            top = cy + r + 12
+            room = w - 2 * inset("circle", w, h, 0, top, top + 14) - 28
+            return w / 2, cy, r, None, top, room
+        r = 46 * k ** 0.5            # the dial grows slower than the digits would, so the date keeps its room
+        cx = PAD + r
+        x = cx + r + 22
+        return cx, h / 2, r, x, h / 2 - 6, STAR_C[0] - STAR_RH - 14 - x
+
+    def draw_dial(self, p):
+        """Rim and ticks, drawn once with the rest of the card."""
+        cx, cy, r, *_ = self.dial()
+        p.save()
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.setPen(QPen(QColor(255, 255, 255, 36), 1.2))
+        p.drawEllipse(QPointF(cx, cy), r, r)
+        for i in range(60):
+            hour = i % 5 == 0
+            a = math.radians(i * 6)
+            r0, r1 = r - (9 if hour else 4.5), r - 2.5
+            p.setPen(QPen(QColor(236, 238, 244, 230 if hour else 70), 2.0 if hour else 1.0, cap=Qt.PenCapStyle.RoundCap))
+            p.drawLine(QPointF(cx + r0 * math.sin(a), cy - r0 * math.cos(a)),
+                       QPointF(cx + r1 * math.sin(a), cy - r1 * math.cos(a)))
+        p.restore()
+
+    def hand(self, p, cx, cy, deg, length, width, tail=0.0, metal=True):
+        p.save()
+        p.translate(cx, cy)
+        p.rotate(deg)
+        body = QRectF(-width / 2, -length, width, length + tail)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(0, 0, 0, 110))
+        p.drawRoundedRect(body.translated(1.2, 1.8), width / 2, width / 2)
+        if metal:
+            g = QLinearGradient(-width / 2, 0, width / 2, 0)
+            g.setColorAt(0, QColor("#ffffff"))
+            g.setColorAt(0.5, QColor("#9a9ea8"))
+            g.setColorAt(1, QColor("#e8eaef"))
+            p.setBrush(g)
+        else:
+            p.setBrush(QColor(236, 238, 244))
+        p.drawRoundedRect(body, width / 2, width / 2)
+        p.restore()
+
+    def draw_analog(self, p, now):
+        cx, cy, r, date_x, date_top, room = self.dial()
+        minute = now.minute + now.second / 60
+        hour = now.hour % 12 + minute / 60
+        self.hand(p, cx, cy, hour * 30, r * 0.5, 4.6 * r / 46)
+        self.hand(p, cx, cy, minute * 6, r * 0.76, 3.2 * r / 46)
+        if self.seconds:
+            self.hand(p, cx, cy, now.second * 6, r * 0.84, 1.3, tail=r * 0.16, metal=False)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(236, 238, 244))
+        p.drawEllipse(QPointF(cx, cy), 3.4, 3.4)
+        p.setBrush(QColor(13, 13, 15))
+        p.drawEllipse(QPointF(cx, cy), 1.3, 1.3)
+        self.drawn = {"dial": QRectF(cx - r, cy - r, 2 * r, 2 * r)}
+        date = self.strings(now)[2]
+        if not date:
+            return
+        img = self.date_image(date)
+        dw, dh = img.width() / S, img.height() / S
+        k = min(1.0, (room + 4 / S) / dw)
+        dx = date_x if date_x is not None else (self.size[0] - dw * k) / 2
+        p.drawImage(QRectF(dx - 2 / S, date_top - 2 / S, dw * k, dh * k), img)
+        self.drawn["date"] = QRectF(dx, date_top, (dw - 4 / S) * k, (dh - 4 / S) * k)
+
     def draw_text(self, p, now):
+        if self.face == "analog":
+            return self.draw_analog(p, now)
         t, ampm, date = self.strings(now)
+        top, date_top, room, centered = self.layout()
         track = -1.0
         gap = 3
         first = self.big.get(t[0])
         digit_top = self.big.get("0")["ink_t"]
         total = self.big.width(t, track) + (gap + self.small.width(ampm) if ampm else 0) - first["ink_l"]
-        fit = min(1.0, TEXT_MAX_W / total)
+        fit = min(1.0, room / total)
 
+        w = self.size[0]
+        x0 = (w - total * fit) / 2 if centered else PAD
+        self.drawn = {"time": QRectF(x0, top, total * fit, -digit_top * fit)}    # for the overlap tests
         p.save()
-        p.translate(PAD, TIME_TOP)
+        p.translate(x0, top)
         p.scale(fit, fit)                        # only shrinks for very long times, like with seconds
         x = -first["ink_l"]                      # so the first digit's ink starts exactly at PAD
         self.big.draw(p, t, x, -digit_top, track)
@@ -357,17 +630,38 @@ class ClockCard:
             self.small.draw(p, ampm, x + self.big.width(t, track) + gap, -digit_top)
         p.restore()
 
+        if not date:
+            return
         # the date's ink also starts exactly at PAD, so both lines share one left edge
-        p.drawImage(QPointF(PAD - 2 / S, DATE_TOP - 2 / S), self.date_image(date))
+        img = self.date_image(date)
+        dw, dh = img.width() / S, img.height() / S
+        k = min(1.0, (room + 4 / S) / dw)            # a long date shrinks to fit, like the time does
+        dx = (w - dw * k) / 2 if centered else PAD - 2 / S
+        if k < 1:
+            p.drawImage(QRectF(dx, date_top - 2 / S, dw * k, dh * k), img)
+        else:
+            p.drawImage(QPointF(dx, date_top - 2 / S), img)
+        self.drawn["date"] = QRectF(dx + 2 / S * k, date_top, (dw - 4 / S) * k, (dh - 4 / S) * k)
 
     def paint(self, p, now=None, clock=None):
         now = now or datetime.datetime.now()
         clock = time.monotonic() if clock is None else clock
+        w, h = self.size
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        p.drawImage(QRectF(0, 0, W + 2 * M, H + 2 * M), self.shadow)
+        if self.show_shadow:
+            p.drawImage(QRectF(0, 0, w + 2 * M, h + 2 * M), self.shadow)
         p.translate(M, M)
-        p.drawImage(QRectF(0, 0, W, H), self.base)
+        if getattr(self, "bg_on", False):
+            p.save()
+            p.setClipPath(self.card_path())
+            p.fillRect(QRectF(0, 0, w, h), self.fill())
+            if self.background is not None:
+                bw, bh = self.background.width() / 2, self.background.height() / 2
+                p.drawImage(QRectF((w - bw) / 2, (h - bh) / 2, bw, bh), self.background)
+                p.fillRect(QRectF(0, 0, w, h), QColor(0, 0, 0, int(255 * self.dim / 100)))
+            p.restore()
+        p.drawImage(QRectF(0, 0, w, h), self.base)
         for k, t0 in self.effects.items():
             if k == "main":
                 v = pulse((clock - t0) / SHINE_TIME)
@@ -380,110 +674,90 @@ class ClockCard:
         self.draw_text(p, now)
 
 
-# ---------------------------------------------------------------- pause while a game is fullscreen
-def fullscreen_app_open():
-    """True when the app in front covers the whole monitor (a game, a fullscreen video)."""
-    if sys.platform != "win32":
-        return False
-    try:
-        import ctypes
-        from ctypes import wintypes
-        u = ctypes.windll.user32
-        u.GetForegroundWindow.restype = wintypes.HWND
-        u.MonitorFromWindow.restype = wintypes.HANDLE
-        u.MonitorFromWindow.argtypes = [wintypes.HWND, wintypes.DWORD]
-        u.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
-        u.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+_unbounded = None
 
-        class MONITORINFO(ctypes.Structure):
-            _fields_ = [("cbSize", wintypes.DWORD), ("rcMonitor", wintypes.RECT),
-                        ("rcWork", wintypes.RECT), ("dwFlags", wintypes.DWORD)]
-        u.GetMonitorInfoW.argtypes = [wintypes.HANDLE, ctypes.POINTER(MONITORINFO)]
 
-        hwnd = u.GetForegroundWindow()
-        if not hwnd:
-            return False
-        name = ctypes.create_unicode_buffer(64)
-        u.GetClassNameW(hwnd, name, 64)
-        if name.value in ("Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd"):
-            return False
-        r = wintypes.RECT()
-        u.GetWindowRect(hwnd, ctypes.byref(r))
-        mi = MONITORINFO()
-        mi.cbSize = ctypes.sizeof(MONITORINFO)
-        if not u.GetMonitorInfoW(u.MonitorFromWindow(hwnd, 2), ctypes.byref(mi)):
-            return False
-        m = mi.rcMonitor
-        return r.left <= m.left and r.top <= m.top and r.right >= m.right and r.bottom >= m.bottom
-    except Exception:
-        return False
+def unbounded_family():
+    """Load the bundled font into Qt once, for dates drawn by Qt."""
+    global _unbounded
+    if _unbounded is None:
+        _unbounded = ""
+        for path in FONT_SPOTS:
+            if os.path.exists(path):
+                fid = QFontDatabase.addApplicationFont(path)
+                fams = QFontDatabase.applicationFontFamilies(fid) if fid >= 0 else []
+                if fams:
+                    _unbounded = fams[0]
+                    break
+    return _unbounded
+
+
+# ---------------------------------------------------------------- preview for the settings window
+_preview = None
+
+
+def preview_image(o, settings=None, dpr=2):
+    global _preview
+    if _preview is None:
+        _preview = ClockCard()            # building the chrome star takes a moment, so keep one around
+    card = _preview
+    card.apply(o)
+    if o["background"]:
+        card.set_background(QImageReader(o["background"]).read())
+    w, h = card.size
+    return render(lambda p: card.paint(p, datetime.datetime.now(), 0.0), w + 2 * M, h + 2 * M, dpr, o["opacity"])
 
 
 # ---------------------------------------------------------------- open with Windows
 def startup_command():
-    exe = sys.executable
-    pyw = os.path.join(os.path.dirname(exe), "pythonw.exe")
-    return f'"{pyw if os.path.exists(pyw) else exe}" "{os.path.abspath(__file__)}"'
-
-
-def run_key(write=False):
-    import winreg
-    access = winreg.KEY_ALL_ACCESS if write else winreg.KEY_READ
-    return winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, access)
+    return aura_common.startup_command(__file__)
 
 
 def startup_enabled():
-    try:
-        import winreg
-        with run_key() as k:
-            winreg.QueryValueEx(k, RUN_NAME)
-        return True
-    except Exception:
-        return False
+    return aura_common.startup_enabled(RUN_NAME)
 
 
 def set_startup(on):
-    import winreg
-    with run_key(True) as k:
-        if on:
-            winreg.SetValueEx(k, RUN_NAME, 0, winreg.REG_SZ, startup_command())
-        else:
-            try:
-                winreg.DeleteValue(k, RUN_NAME)
-            except FileNotFoundError:
-                pass
+    aura_common.set_startup(RUN_NAME, on, __file__)
 
 
 # ---------------------------------------------------------------- window
 def main():
     from PyQt6.QtWidgets import QApplication, QWidget, QMenu
+    import aura_ui
 
+    aura_common.setup_logging("aura_clock")
     app = QApplication(sys.argv)
     lock = QLockFile(os.path.join(tempfile.gettempdir(), "aura_clock.lock"))
     if not lock.tryLock(100):
         return
-    settings = QSettings("Aura", "Clock")
+    settings = aura_common.settings("Clock")
 
     class Widget(QWidget):
         def __init__(self):
             super().__init__()
             self.card = ClockCard()
-            self.card.h24 = settings.value("h24", "false") == "true"
-            self.card.seconds = settings.value("seconds", "false") == "true"
-            self.scale = float(settings.value("scale", 1.0))
-            self.on_top = settings.value("on_top", "false") == "true"
-            self.sparkle_on = settings.value("sparkle", "true") == "true"
+            self.opts = aura_common.options(settings, "Clock")
+            self.card.apply(self.opts)
+            self.scale = self.opts["scale"]
+            self.on_top = self.opts["on_top"]
+            self.sparkle_on = self.opts["sparkle"]
             self.paused_for_game = False
+            self.held = False            # paused from the tray
             self.drag = None
+            # optional background GIF or picture behind the time
+            self.bg = GifPlayer(self)
+            self.bg.frame.connect(self.on_background)
+            self.bg_path = ""
+            self.extras = aura_ui.Extras(
+                self, settings, "Clock", "Clock", "aura_clock", RUN_NAME, __file__,
+                lambda g: QPoint(g.right() - self.width() - 20, g.top() + 20), lambda: M * self.scale,
+                hold=self.set_held, held=lambda: self.held, changed=self.apply_settings, refresh=self.check_game)
+            self.load_background()
             self.apply_flags()
             self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
             self.resize_to_scale()
-            pos = settings.value("pos")
-            if isinstance(pos, QPoint):
-                self.move(pos)
-            else:
-                g = QGuiApplication.primaryScreen().availableGeometry()
-                self.move(g.right() - self.width() - 20, g.top() + 20)
+            self.extras.place()
 
             self.timer = QTimer(self, singleShot=True)
             self.timer.timeout.connect(self.tick)
@@ -503,15 +777,61 @@ def main():
 
         def tick(self):
             self.update()
-            now = datetime.datetime.now()
-            if self.card.seconds:
-                wait = 1000 - now.microsecond // 1000
-            else:
-                wait = (60 - now.second) * 1000 - now.microsecond // 1000
-            self.timer.start(max(50, wait + 20))
+            wait = ms_to_next_tick(datetime.datetime.now(), self.card.seconds)
+            self.timer.start(wait)
+            self.due = time.time() + wait / 1000
 
         def animating_allowed(self):
-            return self.sparkle_on and not self.paused_for_game
+            return self.sparkle_on and not self.paused_for_game and not self.held
+
+        # settings from the settings window (all optional, the defaults are the 1.0 clock)
+        def apply_settings(self):
+            old, self.opts = self.opts, aura_common.options(settings, "Clock")
+            size = self.card.size
+            self.card.apply(self.opts)
+            if self.opts["background"] != self.bg_path or old["shape"] != self.opts["shape"]:
+                self.load_background()
+            if self.opts["scale"] != self.scale or self.card.size != size:
+                self.scale = self.opts["scale"]
+                self.resize_to_scale()
+            if self.opts["seconds"] != old["seconds"]:
+                self.timer.stop()
+                self.tick()
+            if self.opts["sparkle"] != self.sparkle_on:
+                self.sparkle_on = self.opts["sparkle"]
+                self.set_held(self.held)
+            if (self.opts["on_top"], self.opts["click_through"]) != (self.on_top, old["click_through"]):
+                self.on_top = self.opts["on_top"]
+                self.apply_flags()
+                self.extras.reshow()
+            if self.opts["monitor"] != old["monitor"]:
+                self.extras.place()
+            self.update()
+
+        def load_background(self):
+            self.bg_path = self.opts["background"]
+            if self.bg_path and self.bg.open(self.bg_path):
+                self.bg.set_paused(self.paused_for_game or self.held)
+            else:
+                if self.bg_path:
+                    logging.warning("can't show %s behind the clock", self.bg_path)
+                self.bg.set_paused(True)
+                self.bg.path = self.bg.reader = None
+                self.card.set_background(None)
+
+        def on_background(self, img):
+            self.card.set_background(img)
+            self.update()
+
+        def set_held(self, on):
+            self.held = on
+            if self.bg.path:
+                self.bg.set_paused(on or self.paused_for_game)
+            if on or not self.animating_allowed():
+                self.shine_timer.stop()
+                self.twinkle_timer.stop()
+            else:
+                self.schedule()
 
         def schedule(self):
             if not self.animating_allowed():
@@ -529,7 +849,7 @@ def main():
 
         def twinkle(self):
             if self.animating_allowed():
-                free = [i for i in range(len(TINY)) if i not in self.card.effects]
+                free = [i for i in range(len(self.card.tiny)) if i not in self.card.effects]
                 if free:
                     self.card.start(random.choice(free))
                     self.frames.start()
@@ -546,9 +866,15 @@ def main():
                 self.frames.stop()
 
         def check_game(self):
-            busy = fullscreen_app_open()
+            if time.time() > self.due + 2:
+                # the minute timer fired late (the PC slept, or the system clock jumped), catch up now
+                self.timer.stop()
+                self.tick()
+            busy = fullscreen_app_open() or self.extras.hidden_all
             if busy != self.paused_for_game:
                 self.paused_for_game = busy
+                if self.bg.path:
+                    self.bg.set_paused(busy or self.held)
                 if busy:
                     self.shine_timer.stop()
                     self.twinkle_timer.stop()
@@ -561,29 +887,31 @@ def main():
         def apply_flags(self):
             flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool
             flags |= Qt.WindowType.WindowStaysOnTopHint if self.on_top else Qt.WindowType.WindowStaysOnBottomHint
-            self.setWindowFlags(flags)
+            self.setWindowFlags(self.extras.flags(flags))
 
         def resize_to_scale(self):
-            self.setFixedSize(int((W + 2 * M) * self.scale), int((H + 2 * M) * self.scale))
+            w, h = self.card.size
+            self.setFixedSize(int((w + 2 * M) * self.scale), int((h + 2 * M) * self.scale))
 
         def paintEvent(self, e):
-            p = QPainter(self)
+            self.extras.paint(self.draw)
+
+        def draw(self, p):
             p.scale(self.scale, self.scale)
             self.card.paint(p)
-            p.end()
 
         def mousePressEvent(self, e):
-            if e.button() == Qt.MouseButton.LeftButton:
+            if e.button() == Qt.MouseButton.LeftButton and not self.extras.locked:
                 self.drag = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
 
         def mouseMoveEvent(self, e):
             if self.drag is not None and e.buttons() & Qt.MouseButton.LeftButton:
-                self.move(e.globalPosition().toPoint() - self.drag)
+                self.move(self.extras.snap(e.globalPosition().toPoint() - self.drag))
 
         def mouseReleaseEvent(self, e):
             if self.drag is not None:
                 self.drag = None
-                settings.setValue("pos", self.pos())
+                self.extras.remember()
 
         def contextMenuEvent(self, e):
             menu = QMenu(self)
@@ -598,6 +926,7 @@ def main():
                 a = QAction(label, size_menu, checkable=True, checked=abs(self.scale - val) < 0.01)
                 a.triggered.connect(lambda _, v=val: self.set_scale(v))
                 size_menu.addAction(a)
+            self.extras.settings_action(menu)
             menu.addSeparator()
             top = QAction("Keep on top of windows", menu, checkable=True, checked=self.on_top)
             boot = QAction("Open when my PC starts", menu, checkable=True, checked=startup_enabled())
@@ -627,7 +956,7 @@ def main():
                 self.on_top = not self.on_top
                 settings.setValue("on_top", "true" if self.on_top else "false")
                 self.apply_flags()
-                self.show()
+                self.extras.reshow()
             elif chosen is boot:
                 set_startup(not startup_enabled())
             elif chosen is quit_a:

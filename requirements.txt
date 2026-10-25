@@ -1,7 +1,8 @@
-   PyQt6
-   Pillow
-   winrt-runtime
-   winrt-Windows.Media.Control
-   winrt-Windows.Storage.Streams
-   winrt-Windows.Foundation
-   winrt-Windows.Foundation.Collections
+PyQt6>=6.6
+Pillow>=10.0
+numpy>=1.26
+winrt-runtime>=2.0; sys_platform == "win32"
+winrt-Windows.Media.Control>=2.0; sys_platform == "win32"
+winrt-Windows.Storage.Streams>=2.0; sys_platform == "win32"
+winrt-Windows.Foundation>=2.0; sys_platform == "win32"
+winrt-Windows.Foundation.Collections>=2.0; sys_platform == "win32"

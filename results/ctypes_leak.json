@@ -1,0 +1,14 @@
+{
+  "python": "3.13.16",
+  "calls": 20000,
+  "v1_0": {
+    "bytes_per_call": 6315.5516,
+    "pointer_types_cached": 20000,
+    "mb_per_day_per_widget": 272.83182912
+  },
+  "v1_1": {
+    "bytes_per_call": 0.0724,
+    "pointer_types_cached": 0,
+    "mb_per_day_per_widget": 0.0031276800000000003
+  }
+}

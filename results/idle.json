@@ -1,0 +1,89 @@
+{
+  "machine": "Linux-6.18.44-fc-v153-x86_64-with-glibc2.39",
+  "python": "3.13.16",
+  "warmup_s": 15,
+  "measured_s": 75,
+  "note": "Linux, offscreen Qt, fake media session. Shared 2 core machine.",
+  "rows": [
+    {
+      "cpu_ms_per_min": 695.0509527938456,
+      "timer_wakeups_per_s": 4.506639128217343,
+      "paints_per_s": 5.213301476724797,
+      "rss_mb": 77.3125,
+      "scenario": "music, song playing",
+      "version": "1.0"
+    },
+    {
+      "cpu_ms_per_min": 610.4026830811271,
+      "timer_wakeups_per_s": 4.506721915712333,
+      "paints_per_s": 5.24006423927499,
+      "rss_mb": 78.45703125,
+      "scenario": "music, song playing",
+      "version": "1.1"
+    },
+    {
+      "cpu_ms_per_min": 197.30737518424093,
+      "timer_wakeups_per_s": 0.5066814972273348,
+      "paints_per_s": 1.2533700194570914,
+      "rss_mb": 77.49609375,
+      "scenario": "music, song paused",
+      "version": "1.0"
+    },
+    {
+      "cpu_ms_per_min": 182.98296668882122,
+      "timer_wakeups_per_s": 0.5066793118149616,
+      "paints_per_s": 1.2533646134370102,
+      "rss_mb": 78.5390625,
+      "scenario": "music, song paused",
+      "version": "1.1"
+    },
+    {
+      "cpu_ms_per_min": 1797.8405708982793,
+      "timer_wakeups_per_s": 30.36000964071984,
+      "paints_per_s": 29.08000923425998,
+      "rss_mb": 100.3828125,
+      "scenario": "clock",
+      "version": "1.0"
+    },
+    {
+      "cpu_ms_per_min": 1867.014434092391,
+      "timer_wakeups_per_s": 29.933090184447117,
+      "paints_per_s": 28.66643380693154,
+      "rss_mb": 102.8515625,
+      "scenario": "clock",
+      "version": "1.1"
+    },
+    {
+      "cpu_ms_per_min": 60.137699366936275,
+      "timer_wakeups_per_s": 0.5199939418209811,
+      "paints_per_s": 0.013333177995409772,
+      "rss_mb": 102.9375,
+      "scenario": "clock, sparkle off",
+      "version": "1.0"
+    },
+    {
+      "cpu_ms_per_min": 61.12425161440416,
+      "timer_wakeups_per_s": 0.5199953347821208,
+      "paints_per_s": 0.01333321371236207,
+      "rss_mb": 102.875,
+      "scenario": "clock, sparkle off",
+      "version": "1.1"
+    },
+    {
+      "cpu_ms_per_min": 5443.994644249195,
+      "timer_wakeups_per_s": 23.746493253625324,
+      "paints_per_s": 23.226497050991195,
+      "rss_mb": 74.8046875,
+      "scenario": "gif box, 40 ms frames",
+      "version": "1.0"
+    },
+    {
+      "cpu_ms_per_min": 5487.991969559266,
+      "timer_wakeups_per_s": 25.493143665364194,
+      "paints_per_s": 24.986480768249216,
+      "rss_mb": 75.546875,
+      "scenario": "gif box, 40 ms frames",
+      "version": "1.1"
+    }
+  ]
+}
