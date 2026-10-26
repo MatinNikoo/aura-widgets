@@ -537,3 +537,20 @@ def test_hiding_from_another_process_pauses_and_returns_a_running_box(tmp_path):
     assert r.returncode == 0, r.stderr
     assert json.loads(r.stdout.strip().splitlines()[-1]) == {
         "hidden": True, "paused_while_hidden": True, "shown": True, "playing_again": True}
+
+
+@pytest.mark.parametrize("bad", ["\\\\attacker\\share\\a.gif", "//attacker/share/a.gif", "\\\\?\\UNC\\attacker\\s\\a.gif",
+                                 "file://attacker/share/a.gif", "https://example.com/a.gif"])
+def test_import_leaves_out_network_and_link_paths(isolated, bad):
+    path = str(isolated / "shared.json")
+    json.dump({"format": "aura-settings", "settings": {"Clock": {"background": bad}, "Gif": {"folder": bad}}}, open(path, "w"))
+    done, skipped = aura_profiles.import_file(path)
+    assert "Clock.background" in skipped and "Gif.folder" in skipped
+    assert aura_common.options(aura_common.settings("Clock"), "Clock")["background"] == ""
+
+
+def test_import_keeps_a_normal_local_path(isolated):
+    path = str(isolated / "mine.json")
+    json.dump({"format": "aura-settings", "settings": {"Clock": {"background": "C:\\Users\\me\\Pictures\\a.gif"}}}, open(path, "w"))
+    aura_profiles.import_file(path)
+    assert aura_common.options(aura_common.settings("Clock"), "Clock")["background"] == "C:\\Users\\me\\Pictures\\a.gif"

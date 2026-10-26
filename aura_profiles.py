@@ -75,12 +75,23 @@ def clean(data):
                     skipped.append(f"{name}.{key}")
             elif key in fields:
                 kind, default, extra = fields[key]
-                got[key] = aura_common.coerce(kind, value, default, extra)
+                v = aura_common.coerce(kind, value, default, extra)
+                if kind in ("file", "folder") and v and not local_path(v):
+                    skipped.append(f"{name}.{key}")
+                else:
+                    got[key] = v
             else:
                 got[key] = str(value)
         if got:
             kept[name] = got
     return kept, skipped
+
+
+def local_path(p):
+    """True for a normal path on this PC. A shared settings file could point a GIF at a network share or a link,
+    and just reading \\\\server\\x.gif makes Windows hand that server your sign in hash, so those are left out."""
+    s = str(p).strip().lower()
+    return not (s.startswith(("\\\\", "//")) or "://" in s or s.startswith("file:"))
 
 
 def apply(data):
