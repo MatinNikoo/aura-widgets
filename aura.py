@@ -59,7 +59,9 @@ def check():
             say(f"FAIL {stem}: {e!r}")
     if sys.platform == "win32":
         try:
-            import winrt.windows.media.control, winrt.windows.storage.streams  # noqa: F401,F811
+            import importlib
+            for m in ("winrt.windows.media.control", "winrt.windows.storage.streams"):
+                importlib.import_module(m)
             say("ok   winrt")
         except Exception as e:
             ok = False
