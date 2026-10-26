@@ -14,7 +14,7 @@ Aesthetic desktop widgets for Windows. A now playing card for Spotify that takes
 
 <img src="docs/media/settings.png" width="80%" alt="The settings window with its live preview">
 
-These are drawn by the widgets' own code, offscreen on Linux, so the text font is Inter instead of Windows' Segoe UI. The album covers are public domain paintings from The Met (Van Gogh, Hokusai, Degas and Manet, CC0, listed in `results/demo_credits.json`).
+These are drawn by the widgets' own code, offscreen on Linux, so the text font is Inter instead of Windows' Segoe UI. The songs are from my own playlist, shown with their real album covers, which belong to the artists and their labels (listed in `results/demo_credits.json`). The GIFs are fan art of Junji Ito's Uzumaki, and the wide one is by holique.
 
 ## Install
 

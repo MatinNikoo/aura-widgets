@@ -1,34 +1,27 @@
 [
   {
-    "met_object_id": 436535,
-    "title": "Wheat Field with Cypresses",
-    "artist": "Vincent van Gogh",
-    "date": "1889",
-    "url": "https://www.metmuseum.org/art/collection/search/436535",
-    "license": "CC0, Met Open Access"
+    "song": "Innerbloom",
+    "artist": "RÜFÜS DU SOL",
+    "cover": "album art belongs to the artist and their label, used here only to show the now playing card"
   },
   {
-    "met_object_id": 45434,
-    "title": "Under the Wave off Kanagawa (Kanagawa oki nami ura), also known as The Great Wave, from the series Thirty-six Views of Mount Fuji (Fugaku sanj\u016brokkei)",
-    "artist": "Katsushika Hokusai",
-    "date": "ca. 1830\u201332",
-    "url": "https://www.metmuseum.org/art/collection/search/45434",
-    "license": "CC0, Met Open Access"
+    "song": "If Your Girl Only Knew",
+    "artist": "Fahlberg x Arodes",
+    "cover": "album art belongs to the artist and their label, used here only to show the now playing card"
   },
   {
-    "met_object_id": 438817,
-    "title": "The Dance Class",
-    "artist": "Edgar Degas",
-    "date": "1874",
-    "url": "https://www.metmuseum.org/art/collection/search/438817",
-    "license": "CC0, Met Open Access"
+    "song": "Neverender",
+    "artist": "Justice & Tame Impala",
+    "cover": "album art belongs to the artist and their label, used here only to show the now playing card"
   },
   {
-    "met_object_id": 436947,
-    "title": "Boating",
-    "artist": "Edouard Manet",
-    "date": "1874",
-    "url": "https://www.metmuseum.org/art/collection/search/436947",
-    "license": "CC0, Met Open Access"
+    "song": "Inner Light",
+    "artist": "Elderbrook & Bob Moses",
+    "cover": "album art belongs to the artist and their label, used here only to show the now playing card"
+  },
+  {
+    "song": "Daylight (Matin Remix)",
+    "artist": "TCTS & Hayley May",
+    "cover": "album art belongs to the artist and their label, used here only to show the now playing card"
   }
 ]

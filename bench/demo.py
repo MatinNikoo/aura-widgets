@@ -1,11 +1,12 @@
 """
 Makes the README pictures: docs/media/hero.png, docs/media/demo.gif and docs/media/shapes.png.
-Everything is drawn by the widgets' own drawing code, offscreen. The covers are public domain paintings
-from The Met (CC0). On Linux the text font is Inter, since Segoe UI is a Windows font.
+Everything is drawn by the widgets' own drawing code, offscreen. The songs are from my playlist and the album
+covers are read from data/demo/covers, which isn't in the repo. On Linux the text font is Inter, since Segoe UI
+is a Windows font.
 
     python bench/demo.py
 """
-import os, sys, io, json, math, datetime, urllib.request
+import os, sys, io, math, datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -20,59 +21,29 @@ from PyQt6.QtCore import QRectF, QPointF, QEasingCurve
 import drive
 from aura_draw import render
 
-ART = {  # Met object id: (song title shown on the card, artist line)
-    436535: ("Wheat Field with Cypresses", "Vincent van Gogh"),
-    45434: ("The Great Wave", "Katsushika Hokusai"),
-    438817: ("The Dance Class", "Edgar Degas"),
-    436947: ("Boating", "Edouard Manet"),
+ART = {  # cover file in data/demo/covers: (song title shown on the card, artist line)
+    "innerbloom": ("Innerbloom", "RÜFÜS DU SOL"),
+    "if-your-girl-only-knew": ("If Your Girl Only Knew", "Fahlberg x Arodes"),
+    "neverender": ("Neverender", "Justice & Tame Impala"),
+    "inner-light": ("Inner Light", "Elderbrook & Bob Moses"),
+    "daylight": ("Daylight (Matin Remix)", "TCTS & Hayley May"),
 }
+DUR = {"innerbloom": 579_000, "if-your-girl-only-knew": 199_000, "neverender": 267_000, "inner-light": 258_000, "daylight": 137_000}  # real lengths, ms
 DATA = os.path.join(ROOT, "data", "demo")
 OUT = os.path.join(ROOT, "docs", "media")
 
 
 def fetch():
-    os.makedirs(DATA, exist_ok=True)
-    credits = []
-    for oid in ART:
-        path = os.path.join(DATA, f"{oid}.jpg")
-        meta = json.loads(urllib.request.urlopen(
-            f"https://collectionapi.metmuseum.org/public/collection/v1/objects/{oid}", timeout=30).read())
-        assert meta["isPublicDomain"]
+    """The album covers, read from data/demo/covers/<name>.jpg. They aren't in the repo (data/ is ignored),
+    so drop your own covers there with these names before running this."""
+    covers = {}
+    for name in ART:
+        path = os.path.join(DATA, "covers", f"{name}.jpg")
         if not os.path.exists(path):
-            with open(path, "wb") as f:
-                f.write(urllib.request.urlopen(meta["primaryImageSmall"], timeout=60).read())
-        credits.append({"met_object_id": oid, "title": meta["title"], "artist": meta["artistDisplayName"],
-                        "date": meta["objectDate"], "url": meta["objectURL"], "license": "CC0, Met Open Access"})
-    with open(os.path.join(ROOT, "results", "demo_credits.json"), "w") as f:
-        json.dump(credits, f, indent=2)
-    return {oid: trimmed(os.path.join(DATA, f"{oid}.jpg")) for oid in ART}
-
-
-def trimmed(path):
-    """Some Met scans come with a black strip along one side. Cut it off, plus a hair more, so the covers
-    on the cards show painting all the way to the edge."""
-    im = Image.open(path).convert("RGB")
-    g = im.convert("L")
-    w, h = im.size
-    px = g.load()
-
-    def dark(line):
-        return sum(line) / len(line) < 40
-
-    l, t, r, b = 0, 0, w, h
-    while t < h // 4 and dark([px[x, t] for x in range(w)]):
-        t += 1
-    while b > h * 3 // 4 and dark([px[x, b - 1] for x in range(w)]):
-        b -= 1
-    while l < w // 4 and dark([px[l, y] for y in range(h)]):
-        l += 1
-    while r > w * 3 // 4 and dark([px[r - 1, y] for y in range(h)]):
-        r -= 1
-    m = max(2, int(0.006 * min(w, h)))
-    im = im.crop((l + m, t + m, r - m, b - m))
-    out = io.BytesIO()
-    im.save(out, "JPEG", quality=92)
-    return out.getvalue()
+            raise SystemExit(f"missing {path}, put the album cover there first")
+        with open(path, "rb") as f:
+            covers[name] = f.read()
+    return covers
 
 
 def wallpaper(w, h):
@@ -86,8 +57,41 @@ def wallpaper(w, h):
     return im.filter(ImageFilter.GaussianBlur(w / 12))
 
 
+def box_gif_frames(path, size=(440, 160), step=80, focus_y=0.8):
+    """Your own GIF for the box (data/demo/box.gif or box.webp), cropped to fill it the way the widget's fill mode does,
+    and resampled to one frame every 80 ms so it plays at its real speed in the demo. focus_y picks which part
+    stays in view when the height is cropped, like dragging the GIF inside the box."""
+    src = Image.open(path)
+    shots, times, t = [], [], 0
+    for i in range(getattr(src, "n_frames", 1)):
+        src.seek(i)
+        shots.append(src.convert("RGB"))
+        times.append(t)
+        d = src.info.get("duration") or 0
+        t += d if d > 10 else 100      # like browsers, a frame with no real duration shows for 100 ms
+    total = max(t, step)
+    frames = []
+    for k in range(int(total // step)):
+        j = max(i for i, s in enumerate(times) if s <= k * step)
+        im = shots[j]
+        s = max(size[0] / im.width, size[1] / im.height)
+        im = im.resize((round(im.width * s), round(im.height * s)), Image.Resampling.LANCZOS)
+        x, y = (im.width - size[0]) // 2, int((im.height - size[1]) * focus_y)
+        frames.append(im.crop((x, y, x + size[0], y + size[1])))
+    return frames
+
+
 def gif_frames(data, n=24, size=(440, 160)):
-    """A slow pan across a painting, saved as a real GIF and read back frame by frame with Qt."""
+    """A slow pan across a painting, saved as a real GIF and read back frame by frame with Qt.
+    If data/demo/box.gif (or box.webp) exists, that animation goes in the box instead."""
+    own = next((os.path.join(DATA, f) for f in ("box.gif", "box.webp") if os.path.exists(os.path.join(DATA, f))), None)
+    if own:
+        out = []
+        for im in box_gif_frames(own, size):   # straight to Qt, a GIF round trip would merge repeated frames
+            buf = io.BytesIO()
+            im.save(buf, "PNG")
+            out.append(QImage.fromData(buf.getvalue(), "PNG"))
+        return out
     im = Image.open(io.BytesIO(data)).convert("RGB")
     k = max(size[0] * 1.35 / im.width, size[1] * 1.35 / im.height)
     im = im.resize((int(im.width * k), int(im.height * k)), Image.Resampling.LANCZOS)
@@ -158,12 +162,12 @@ def main():
     card = music.Card()
     round_card = music.Card()
     round_card.set_look(music.Look({"shape": "circle"}))
-    round_track = music.Track(*ART[ids[1]], covers[ids[1]], look=round_card.look)
+    round_track = music.Track(*ART[ids[2]], covers[ids[2]], look=round_card.look)
     round_card.cur = round_track
-    round_card.dur_ms, round_card.pos_ms = 201_000, 74_000
+    round_card.dur_ms, round_card.pos_ms = DUR[ids[2]], 74_000
     ck = clock.ClockCard()
     gcard = gif.GifCard(440, 160)
-    frames = gif_frames(covers[ids[3]])
+    frames = gif_frames(covers[ids[4]])
     font = gif.pick_font(14, QFont.Weight.Medium)
     ck2 = clock.ClockCard()
     ck2.apply(dict(zip(("face", "shape", "seconds", "date"), ("analog", "pill", True, "weekday")),
@@ -187,7 +191,7 @@ def main():
             card.old, card.cur, card.t = tracks[0], tracks[1], ease((t - 1.4) / 1.4)
             if card.t >= 1:
                 card.old = None
-        card.dur_ms = 201_000 if t >= 1.4 else 245_000
+        card.dur_ms = DUR[ids[1]] if t >= 1.4 else DUR[ids[0]]
         card.pos_ms = (60_000 + t * 1000) if t < 1.4 else (2_000 + (t - 1.4) * 1000)
         card.playing = False
         card.hover = max(0.0, min(1.0, (t - 3.0) / 0.25)) * (1 - max(0.0, min(1.0, (t - 5.4) / 0.25)))
@@ -195,13 +199,13 @@ def main():
         if 3.6 <= t < 4.8:
             card.preview = 0.25 + 0.5 * ease((t - 3.6) / 0.9)
         elif t >= 4.8:
-            card.pos_ms = 0.75 * 201_000 + (t - 4.8) * 1000
+            card.pos_ms = 0.75 * DUR[ids[1]] + (t - 4.8) * 1000
         if scene and t >= 6.0:
             # back to the first song so the loop closes
             card.old, card.cur, card.t = tracks[1], tracks[0], ease((t - 6.0) / 1.4)
             if card.t >= 1:
                 card.old = None
-            card.dur_ms = 245_000
+            card.dur_ms = DUR[ids[0]]
             card.pos_ms = 60_000 + (t - 8.0) * 1000
         elif scene and t < 1.4:
             card.pos_ms = 60_000 + t * 1000
@@ -250,12 +254,13 @@ def shapes(music, clock, gif, covers, tracks, frames, font):
     """One picture of the shape settings: each widget in a few shapes."""
     ids = list(ART)
     cells = []
-    for shape, extra in (("pill", {}), ("squircle", {"text_size": 115}), ("square", {"border": "bold"}),
-                         ("circle", {})):
+    for n, (shape, extra) in enumerate((("pill", {}), ("squircle", {"text_size": 115}), ("square", {"border": "bold"}),
+                                        ("circle", {}))):
+        song = ids[1 + n]          # a different song in each shape
         c = music.Card()
         c.set_look(music.Look(dict(shape=shape, **extra)))
-        c.cur = music.Track(*ART[ids[2]], covers[ids[2]], look=c.look)
-        c.dur_ms, c.pos_ms = 198_000, 121_000
+        c.cur = music.Track(*ART[song], covers[song], look=c.look)
+        c.dur_ms, c.pos_ms = DUR[song], min(121_000, DUR[song] // 2)
         cells.append((c.size, music.M, c.paint))
     for shape, o in (("pill", {}), ("circle", {"locale": "fa_IR", "h24": True}), ("squircle", {"style": "flat"})):
         k = clock.ClockCard()
@@ -265,10 +270,20 @@ def shapes(music, clock, gif, covers, tracks, frames, font):
         base.update(o)
         k.apply(base)
         cells.append((k.size, clock.M, (lambda kk: lambda p: kk.paint(p, datetime.datetime(2026, 10, 22, 9, 5), 0.0))(k)))
-    for shape, size in (("circle", (200, 200)), ("pill", (440, 160))):
+    # a square GIF suits the round box, so data/demo/box_square.gif (or .webp) goes there when it exists
+    square = next((os.path.join(DATA, f) for f in ("box_square.gif", "box_square.webp")
+                   if os.path.exists(os.path.join(DATA, f))), None)
+    round_frame = frames[6 % len(frames)]
+    if square:
+        im = box_gif_frames(square, (200, 200), focus_y=0.5)
+        im = im[len(im) * 3 // 5]
+        buf = io.BytesIO()
+        im.save(buf, "PNG")
+        round_frame = QImage.fromData(buf.getvalue(), "PNG")
+    for shape, size, fr in (("circle", (200, 200), round_frame), ("pill", (440, 160), frames[6 % len(frames)])):
         g = gif.GifCard(*size)
         g.apply({"shape": shape, "radius": 26, "border": "thin", "mode": "fill", "shadow": True})
-        g.set_frame(frames[6])
+        g.set_frame(fr)
         cells.append(((size[0], size[1]), gif.M, (lambda gg: lambda p: gg.paint(p, font))(g)))
     cols, cw, chh = 3, 520, 300
     rows = (len(cells) + cols - 1) // cols

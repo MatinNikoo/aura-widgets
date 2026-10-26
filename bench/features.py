@@ -54,7 +54,7 @@ def main():
         c = music.Card()
         c.set_look(music.Look(options("Widget", backdrop="blur", **kw)))
         c.cur = music.Track(*demo.ART[ids[i]], covers[ids[i]], look=c.look)
-        c.dur_ms, c.pos_ms = 201_000, 74_000 + i * 50_000
+        c.dur_ms, c.pos_ms = demo.DUR[ids[i]], 74_000 + i * 50_000
         cells.append((c.size, music.M, c.paint))
 
     cols, cw, chh = 2, 520, 230
