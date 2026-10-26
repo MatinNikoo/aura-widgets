@@ -1,5 +1,5 @@
 PyQt6>=6.6
-Pillow>=10.0
+Pillow>=13.0.0
 numpy>=1.26
 winrt-runtime>=2.0; sys_platform == "win32"
 winrt-Windows.Media.Control>=2.0; sys_platform == "win32"

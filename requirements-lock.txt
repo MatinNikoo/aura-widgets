@@ -1,6 +1,6 @@
 # exact versions CI tests with
 PyQt6==6.11.0
-Pillow==12.3.0
+Pillow==13.0.0
 numpy==2.5.3
 winrt-runtime==3.2.1; sys_platform == "win32"
 winrt-Windows.Media.Control==3.2.1; sys_platform == "win32"
