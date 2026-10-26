@@ -104,21 +104,26 @@ def test_a_widget_only_watches_its_own_file(app, tmp_path):
     from PyQt6.QtCore import QSettings
     from PyQt6.QtWidgets import QWidget
     import aura_ui
+
+    def norm(paths):
+        # Qt hands paths back with forward slashes, Windows paths from pathlib use backslashes
+        return [os.path.normcase(os.path.normpath(p)) for p in paths]
+
     own = tmp_path / "Music.ini"
     s = QSettings(str(own), QSettings.Format.IniFormat)
     w = QWidget()
     ex = aura_ui.Extras(w, s, "Music", "Music", "aura_widget", "AuraWidget", __file__, (0, 0), 0)
-    folder = str(tmp_path)
-    assert folder in ex.watcher.directories()           # no file yet, so the folder is watched
+    folder = norm([str(tmp_path)])[0]
+    assert folder in norm(ex.watcher.directories())     # no file yet, so the folder is watched
     s.setValue("opacity", 0.9)
     s.sync()
     ex.watch()
-    assert str(own) in ex.watcher.files()
+    assert norm([str(own)])[0] in norm(ex.watcher.files())
     assert ex.watcher.directories() == []                # the file exists, so only the file is watched
     ex.watcher.removePaths(ex.watcher.files())
     own.unlink()
     ex.watch()
-    assert folder in ex.watcher.directories()            # the file went away, so it watches for it to return
+    assert folder in norm(ex.watcher.directories())     # the file went away, so it watches for it to return
 
 
 # ---------------------------------------------------------------- the General tab and the new rows

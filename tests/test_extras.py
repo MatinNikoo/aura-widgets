@@ -59,6 +59,7 @@ def test_parse_hotkey(text, want):
     assert aura_hotkey.parse_hotkey(text) == want
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="on Windows the hotkey is real, tests/windows_checks.py covers it")
 def test_hotkey_does_nothing_off_windows(app):
     hk = aura_hotkey.Hotkey()
     hk.set("Ctrl+Alt+A")
