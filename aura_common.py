@@ -150,8 +150,10 @@ def startup_command(script):
 
 def run_key(write=False):
     import winreg
-    access = winreg.KEY_ALL_ACCESS if write else winreg.KEY_READ
-    return winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, access)
+    if write:
+        # a brand new Windows account may not have the Run key yet, so create it when turning startup on
+        return winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_ALL_ACCESS)
+    return winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_READ)
 
 
 def startup_enabled(name):
