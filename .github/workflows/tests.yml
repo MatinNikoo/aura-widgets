@@ -1,0 +1,86 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: system libraries and fonts for offscreen Qt
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3 fonts-noto-cjk fonts-dejavu-core
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pyflakes aura.py aura_common.py aura_draw.py aura_ui.py aura_settings.py aura_profiles.py aura_hotkey.py aura_library.py
+      - run: python -m pytest -q tests
+      - run: python aura.py --check
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - name: tests
+        run: python -m pytest -q tests
+      - name: real winrt checks (fullscreen check, timeouts around winrt calls, media manager)
+        run: python tests/windows_checks.py
+      - name: build Aura.exe
+        run: pyinstaller --noconfirm aura.spec
+      - name: packaged app loads every widget
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath dist\Aura\Aura.exe -ArgumentList "--check" -Wait -PassThru
+          Get-Content "$env:TEMP\aura_check.txt"
+          if ($p.ExitCode -ne 0) { exit 1 }
+      - name: packaged widgets stay up for 10 seconds
+        shell: pwsh
+        run: |
+          foreach ($w in "aura_widget", "aura_clock", "aura_gif") {
+            $p = Start-Process -FilePath dist\Aura\Aura.exe -ArgumentList $w -PassThru
+            Start-Sleep -Seconds 10
+            if ($p.HasExited) { Write-Host "$w exited with $($p.ExitCode)"; Get-Content "$env:APPDATA\Aura\logs\$w.log" -ErrorAction SilentlyContinue; exit 1 }
+            Stop-Process -Id $p.Id -Force
+            Write-Host "$w ran"
+          }
+      - name: build the installer
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $env:AURA_VERSION = (python -c "import aura_common; print(aura_common.__version__)")
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer\aura.iss
+      - name: install, run and uninstall silently
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist\AuraSetup-*.exe | Select-Object -First 1
+          Start-Process $setup.FullName -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS=music" -Wait
+          $exe = "$env:LOCALAPPDATA\Programs\Aura\Aura.exe"
+          if (-not (Test-Path $exe)) { Write-Host "not installed"; exit 1 }
+          $run = Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+          if (-not $run.AuraWidget) { Write-Host "start with Windows was not set"; exit 1 }
+          Get-Process Aura -ErrorAction SilentlyContinue | Stop-Process -Force
+          Start-Process "$env:LOCALAPPDATA\Programs\Aura\unins000.exe" -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES" -Wait
+          Start-Sleep -Seconds 3
+          if (Test-Path $exe) { Write-Host "still installed"; exit 1 }
+          $run = Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+          if ($run.AuraWidget) { Write-Host "Run value left behind"; exit 1 }
+          Write-Host "install and uninstall ok"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aura-windows
+          path: |
+            dist/AuraSetup-*.exe
+            dist/Aura/
