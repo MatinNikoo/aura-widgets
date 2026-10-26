@@ -57,9 +57,10 @@ def wallpaper(w, h):
     return im.filter(ImageFilter.GaussianBlur(w / 12))
 
 
-def box_gif_frames(path, size=(440, 160), step=80, focus_y=0.8):
+def box_gif_frames(path, size=(440, 160), step=50, focus_y=0.8):
     """Your own GIF for the box (data/demo/box.gif or box.webp), cropped to fill it the way the widget's fill mode does,
-    and resampled to one frame every 80 ms so it plays at its real speed in the demo. focus_y picks which part
+    and resampled to one frame every 50 ms, the demo's own frame rate, so every GIF frame lasts an even number
+    of demo frames and it plays at its real speed without stutter. focus_y picks which part
     stays in view when the height is cropped, like dragging the GIF inside the box."""
     src = Image.open(path)
     shots, times, t = [], [], 0
@@ -218,8 +219,8 @@ def main():
         now = datetime.datetime(2026, 10, 22, 21, 47, 20) + datetime.timedelta(seconds=math.floor(t))
         put(p, 28, 290, lambda q: ck_.paint(q, now if scene else datetime.datetime(2026, 10, 22, 21, 47), t), ck_.size, clock.M, dpr)
 
-        # GIF box, playing at the GIF's own 80 ms per frame
-        g = frames[int(t * 1000 / 80) % len(frames)]
+        # GIF box at its real speed, one prepared frame per 50 ms demo frame
+        g = frames[round(t * 1000 / 50) % len(frames)]
         gc_.set_frame(g)
         put(p, 506, 30, lambda q: gc_.paint(q, font), (gc_.w, gc_.h), gif.M, dpr)
 
